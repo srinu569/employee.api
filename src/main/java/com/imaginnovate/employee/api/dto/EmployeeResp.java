@@ -1,5 +1,8 @@
 package com.imaginnovate.employee.api.dto;
 
+import lombok.Data;
+
+@Data
 public class EmployeeResp {
 	
 	private Long employeeId;
@@ -17,55 +20,6 @@ public class EmployeeResp {
         this.taxAmount = taxAmount;
         this.cessAmount = cessAmount;
     }
-
-	public Long getEmployeeId() {
-		return employeeId;
-	}
-
-	public void setEmployeeId(Long employeeId) {
-		this.employeeId = employeeId;
-	}
-
-	public String getFirstName() {
-		return firstName;
-	}
-
-	public void setFirstName(String firstName) {
-		this.firstName = firstName;
-	}
-
-	public String getLastName() {
-		return lastName;
-	}
-
-	public void setLastName(String lastName) {
-		this.lastName = lastName;
-	}
-
-	public double getYearlySalary() {
-		return yearlySalary;
-	}
-
-	public void setYearlySalary(double yearlySalary) {
-		this.yearlySalary = yearlySalary;
-	}
-
-	public double getTaxAmount() {
-		return taxAmount;
-	}
-
-	public void setTaxAmount(double taxAmount) {
-		this.taxAmount = taxAmount;
-	}
-
-	public double getCessAmount() {
-		return cessAmount;
-	}
-
-	public void setCessAmount(double cessAmount) {
-		this.cessAmount = cessAmount;
-	}
-    
     
 
 }

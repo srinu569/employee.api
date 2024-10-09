@@ -7,123 +7,102 @@ import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.imaginnovate.employee.api.dto.EmployeeReqDto;
 import com.imaginnovate.employee.api.dto.EmployeeResp;
+import com.imaginnovate.employee.api.jpa.entity.MoEmployee;
 import com.imaginnovate.employee.api.jpa.repositories.MoEmployeeRepository;
-import com.imaginnovate.employee.jpa.entity.MoEmployee;
 
 @Service
 public class EmployeeService {
-	
-	@Autowired
+
+    @Autowired
     private MoEmployeeRepository empRepository;
 
-	public EmployeeReqDto addEmployee(EmployeeReqDto employee) {
-		
-		 validateEmployeeRequest(employee);
-		
-		MoEmployee moEmployee = new MoEmployee();
-		
-		moEmployee.setFirstName(employee.getFirstName());
-		moEmployee.setLastName(employee.getLastName());
-		moEmployee.setEmail(employee.getEmail());		
-		moEmployee.setSalaryPerMonth(employee.getSalaryPerMonth());		
-		moEmployee.setDateOfJoining(employee.getDateOfJoining());
-		moEmployee.setPhoneNumbers(employee.getPhoneNumbers());
-		empRepository.save(moEmployee);
-		
-		EmployeeReqDto response = getEmployeeDto(moEmployee);
-		
-		return response;
-	}
-	
-	private void validateEmployeeRequest(EmployeeReqDto employee) {
-		
-		if (employee.getFirstName() == null || employee.getFirstName().isEmpty()) {
-	        throw new IllegalArgumentException("First name is required");
-	    }
-	    if (employee.getLastName() == null || employee.getLastName().isEmpty()) {
-	        throw new IllegalArgumentException("Last name is required");
-	    }
-	    if (employee.getEmail() == null || employee.getEmail().isEmpty()) {
-	        throw new IllegalArgumentException("Email is required");
-	    }
-	    if (employee.getSalaryPerMonth() == null || employee.getSalaryPerMonth() <= 0) {
-	        throw new IllegalArgumentException("Salary must be greater than zero");
-	    }
-	    if (employee.getDateOfJoining() == null) {
-	        throw new IllegalArgumentException("Date of joining is required");
-	    }
-	    if (employee.getPhoneNumbers() == null || employee.getPhoneNumbers().isEmpty()) {
-	        throw new IllegalArgumentException("At least one phone number is required");
-	    }
-		
-	}
+    @Transactional
+    public EmployeeReqDto addEmployee(EmployeeReqDto employee) {
+       
+        MoEmployee moEmployee = new MoEmployee();
+        moEmployee.setFirstName(employee.getFirstName());
+        moEmployee.setLastName(employee.getLastName());
+        moEmployee.setEmail(employee.getEmail());
+        moEmployee.setSalaryPerMonth(employee.getSalaryPerMonth());
+        moEmployee.setDateOfJoining(employee.getDateOfJoining());
+        moEmployee.setPhoneNumbers(employee.getPhoneNumbers());
+        moEmployee.setEmployeeId(employee.getEmployeeId());
+        
+        empRepository.save(moEmployee);
+        return getEmployeeDto(moEmployee);
+    }
+    
+    public List<EmployeeReqDto> getAllEmployees() {
+        List<MoEmployee> employees = empRepository.findAll();
+        List<EmployeeReqDto> employeeDtos = new ArrayList<>();
 
-	public List<EmployeeResp> getTaxDeductions() {
+        for (MoEmployee moEmployee : employees) {
+            EmployeeReqDto empDto = getEmployeeDto(moEmployee);
+            employeeDtos.add(empDto);
+        }
+
+        return employeeDtos;
+    }
+
+
+    @Transactional
+    public List<EmployeeResp> getTaxDeductions() {
         List<EmployeeResp> employeeResponses = new ArrayList<>();
         List<MoEmployee> employees = empRepository.findAll();
-        
-        for (MoEmployee emp : employees) {
-        	
-            int monthsInService = getMonthsInFinancialYear(emp.getDateOfJoining());
-            
-            double yearlySalary = emp.getSalaryPerMonth() * monthsInService;
-            
-            double taxAmount = calculateTax(yearlySalary);
 
-           
+        for (MoEmployee emp : employees) {
+            double yearlySalary = emp.getSalaryPerMonth() * getMonthsInService(emp.getDateOfJoining());
+            double taxAmount = calculateTax(yearlySalary);
             double cessAmount = calculateCess(yearlySalary);
 
-           
-            EmployeeResp response = new EmployeeResp(
-                emp.getEmployeeId(),
-                emp.getFirstName(),
-                emp.getLastName(),
-                yearlySalary,
-                taxAmount,
-                cessAmount
-            );
+            EmployeeResp response = new EmployeeResp(emp.getEmployeeId(), emp.getFirstName(), emp.getLastName(), yearlySalary, taxAmount, cessAmount);
             employeeResponses.add(response);
         }
-        
+
         return employeeResponses;
     }
-	
-	private int getMonthsInFinancialYear(LocalDate doj) {
-        LocalDate startOfYear = LocalDate.of(LocalDate.now().getYear(), 4, 1); 
-        LocalDate endOfYear = LocalDate.of(LocalDate.now().getYear() + 1, 3, 31);
-        if (doj.isAfter(startOfYear)) {
-            return (int) ChronoUnit.MONTHS.between(doj.withDayOfMonth(1), endOfYear);
-        }
-        return 12;
+
+    private int getMonthsInService(LocalDate doj) {
+        LocalDate currentDate = LocalDate.now();
+        long monthsWorked = ChronoUnit.MONTHS.between(doj, currentDate);
+
+        return (int) Math.min(monthsWorked, 12); // Cap at 12 months
+    }
+
+    @Transactional
+    public double calculateEmployeeTax(String employeeId) {
+        MoEmployee employee = empRepository.findById(Long.parseLong(employeeId))
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+        double yearlySalary = employee.getSalaryPerMonth() * getMonthsInService(employee.getDateOfJoining());
+        return calculateTax(yearlySalary);
     }
 
     private double calculateTax(double yearlySalary) {
+        if (yearlySalary <= 250000) return 0;
+
         double tax = 0.0;
 
-        if (yearlySalary <= 250000) {
-            return tax;
+        if (yearlySalary <= 500000) {
+            tax = (yearlySalary - 250000) * 0.05;
+        } else if (yearlySalary <= 1000000) {
+            tax = (250000 * 0.05) + (yearlySalary - 500000) * 0.1;
+        } else {
+            tax = (250000 * 0.05) + (500000 * 0.1) + (yearlySalary - 1000000) * 0.2;
         }
-        if (yearlySalary > 250000 && yearlySalary <= 500000) {
-            tax += (yearlySalary - 250000) * 0.05;
-        } else if (yearlySalary > 500000 && yearlySalary <= 1000000) {
-            tax += (500000 - 250000) * 0.05 + (yearlySalary - 500000) * 0.1;
-        } else if (yearlySalary > 1000000) {
-            tax += (500000 - 250000) * 0.05 + (1000000 - 500000) * 0.1 + (yearlySalary - 1000000) * 0.2;
-        }
+
         return tax;
     }
 
     private double calculateCess(double yearlySalary) {
-        if (yearlySalary > 2500000) {
-            return (yearlySalary - 2500000) * 0.02;
-        }
-        return 0.0;
+        return yearlySalary > 2500000 ? (yearlySalary - 2500000) * 0.02 : 0;
     }
 
-	private EmployeeReqDto getEmployeeDto(MoEmployee moEmployee) {
+    private EmployeeReqDto getEmployeeDto(MoEmployee moEmployee) {
 		
 		EmployeeReqDto dto = new EmployeeReqDto();
 		
@@ -137,8 +116,5 @@ public class EmployeeService {
 		return dto;
 	}
 
-	
-
-   
-
+    
 }
